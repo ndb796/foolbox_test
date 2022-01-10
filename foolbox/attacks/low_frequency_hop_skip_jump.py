@@ -52,6 +52,32 @@ def sample_gaussian_torch_axis_4(image_size, dct_ratio=0.25):
     return x
 
 
+def sample_gaussian_torch_only_width_axis_4(image_size, dct_ratio=0.25):
+    noise = torch.zeros(image_size)
+    w_use = int(image_size[-1] * dct_ratio)
+    noise[:, :, :, :w_use] = torch.randn(noise.size(0), noise.size(1), noise.size(2), w_use)
+    w_index = len(image_size) - 1
+    x = torch.from_numpy(idct(noise.numpy(), axis=w_index, norm='ortho'))
+    temp = torch.zeros(image_size)
+    return x
+
+
+def sample_gaussian_torch_qr_axis_4(image_size, dct_ratio=0.25):
+    noise = torch.zeros(image_size)
+    h_use = int(image_size[-2] * dct_ratio)
+    w_use = int(image_size[-1] * dct_ratio)
+    for i in range(noise.shape[0]):
+        for j in range(noise.shape[1]):
+            rv = np.random.randn(w_use, h_use)
+            rv_ortho, _ = np.linalg.qr(rv, mode='reduced')
+            noise[i, j, :h_use, :w_use] = torch.tensor(rv_ortho).transpose(1, 0)
+    h_index = len(image_size) - 2
+    w_index = len(image_size) - 1
+    x = torch.from_numpy(idct(idct(noise.numpy(), axis=w_index, norm='ortho'), axis=h_index, norm='ortho'))
+    temp = torch.zeros(image_size)
+    return x
+
+
 class LowFrequencyHopSkipJump(MinimizationAttack):
     """A powerful adversarial attack that requires neither gradients
     nor probabilities [#Chen19].
@@ -302,7 +328,7 @@ class LowFrequencyHopSkipJump(MinimizationAttack):
                 rv = sample_gaussian_torch(noise_shape, dct_ratio)
                 rv = ep.astensor(rv.cuda())
             else:
-                rv = sample_gaussian_torch_axis_4(noise_shape, dct_ratio)
+                rv = sample_gaussian_torch_only_width_axis_4(noise_shape, dct_ratio)
                 rv = ep.astensor(rv.cuda())
         elif self.constraint == "linf":
             rv = ep.uniform(x_advs, low=-1, high=1, shape=noise_shape)
